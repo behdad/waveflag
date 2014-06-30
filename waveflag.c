@@ -1,4 +1,8 @@
 #include <cairo.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <assert.h>
+#include <string.h>
 
 static cairo_path_t *
 wave_path_create (void)
@@ -60,56 +64,166 @@ wave_mesh_create (void)
 	return pattern;
 }
 
+static cairo_surface_t *
+scale_flag (cairo_surface_t *flag)
+{
+	unsigned int w = cairo_image_surface_get_width  (flag);
+	unsigned int h = cairo_image_surface_get_height (flag);
+	cairo_surface_t *scaled = cairo_image_surface_create (CAIRO_FORMAT_ARGB32, 256,256);
+	cairo_t *cr = cairo_create (scaled);
 
-#define SCALE 8.
+	cairo_scale (cr, 256./w, 256./h);
+
+	cairo_set_source_surface (cr, flag, 0, 0);
+	cairo_pattern_set_filter (cairo_get_source (cr), CAIRO_FILTER_BEST);
+	cairo_paint (cr);
+
+	cairo_destroy (cr);
+	return scaled;
+}
+
+static cairo_surface_t *
+load_scaled_flag (const char *filename)
+{
+	cairo_surface_t *flag = cairo_image_surface_create_from_png (filename);
+	cairo_surface_t *scaled = scale_flag (flag);
+	cairo_surface_destroy (flag);
+	return scaled;
+}
+
+#define SCALE 8
 #define SIZE 128
-#define MARGIN_X 1
-#define MARGIN_Y 1
+#define MARGIN_X 0
+#define MARGIN_Y 0
 
-void
-wave_flag (const char *filename)
+static cairo_t *
+create_image (void)
+{
+	cairo_surface_t *surface = cairo_image_surface_create (CAIRO_FORMAT_ARGB32,
+							       (SIZE+2*MARGIN_X)*SCALE,
+							       (SIZE+2*MARGIN_Y)*SCALE);
+	cairo_t *cr = cairo_create (surface);
+
+	cairo_scale (cr, SCALE, SCALE);
+	cairo_translate (cr, MARGIN_X, MARGIN_Y);
+
+	cairo_surface_destroy (surface);
+	return cr;
+}
+
+static cairo_surface_t *
+wave_surface_create (void)
+{
+	cairo_t *cr = create_image ();
+	cairo_surface_t *surface = cairo_surface_reference (cairo_get_target (cr));
+	cairo_pattern_t *mesh = wave_mesh_create ();
+	cairo_set_source (cr, mesh);
+	cairo_paint (cr);
+	cairo_pattern_destroy (mesh);
+	cairo_destroy (cr);
+	return surface;
+}
+
+static cairo_surface_t *
+texture_map (cairo_surface_t *src, cairo_surface_t *tex)
+{
+	uint32_t *s = (uint32_t *) cairo_image_surface_get_data (src);
+	unsigned int width  = cairo_image_surface_get_width (src);
+	unsigned int height = cairo_image_surface_get_height (src);
+	unsigned int sstride = cairo_image_surface_get_stride (src) / 4;
+
+	cairo_surface_t *dst = cairo_image_surface_create (CAIRO_FORMAT_ARGB32, width, height);
+	uint32_t *d = (uint32_t *) cairo_image_surface_get_data (dst);
+	unsigned int dstride = cairo_image_surface_get_stride (dst) / 4;
+
+	uint32_t *t = (uint32_t *) cairo_image_surface_get_data (tex);
+	unsigned int twidth  = cairo_image_surface_get_width (tex);
+	unsigned int theight = cairo_image_surface_get_height (tex);
+	unsigned int tstride = cairo_image_surface_get_stride (tex) / 4;
+
+	assert (twidth == 256 && theight == 256);
+
+	for (unsigned int y = 0; y < height; y++)
+	{
+		for (unsigned int x = 0; x < width; x++)
+		{
+			unsigned int pix = s[x];
+			unsigned int sa = pix >> 24;
+			unsigned int sr = (pix >> 16) & 0xFF;
+			unsigned int sg = (pix >>  8) & 0xFF;
+			unsigned int sb = (pix      ) & 0xFF;
+			if (sa == 0)
+			{
+				d[x] = 0;
+				continue;
+			}
+			if (sa != 255)
+			{
+				/* TODO */
+			}
+			d[x] = t[tstride * sg + sr];
+		}
+		s += sstride;
+		d += dstride;
+	}
+	cairo_surface_mark_dirty (dst);
+
+	return dst;
+}
+
+static void
+wave_flag (const char *filename, const char *out_prefix)
 {
 	static cairo_path_t *wave_path;
-	static	cairo_pattern_t *wave_mesh;
+	static cairo_surface_t *wave_surface;
+	char out[1000];
 
-	cairo_surface_t *surface;
+	cairo_surface_t *scaled_flag, *waved_flag;
 	cairo_t *cr;
 
 	if (!wave_path)
 		wave_path = wave_path_create ();
-	if (!wave_mesh)
-		wave_mesh = wave_mesh_create ();
+	if (!wave_surface)
+		wave_surface = wave_surface_create ();
 
+	scaled_flag = load_scaled_flag (filename);
+	waved_flag = texture_map (wave_surface, scaled_flag);
+	cairo_surface_destroy (scaled_flag);
 
-	surface = cairo_image_surface_create (CAIRO_FORMAT_ARGB32,
-					      (SIZE+2*MARGIN_X)*SCALE,
-					      (SIZE+2*MARGIN_Y)*SCALE);
-	cr = cairo_create (surface);
-	cairo_scale (cr, SCALE, SCALE);
-	cairo_translate (cr, MARGIN_X, MARGIN_Y);
-
-	cairo_set_source (cr, wave_mesh);
-
-	cairo_paint (cr);
+	cr = create_image ();
+	cairo_save (cr);
+		cairo_identity_matrix (cr);
+		cairo_set_source_surface (cr, waved_flag, 0, 0);
+		cairo_paint (cr);
+	cairo_restore (cr);
 	cairo_append_path (cr, wave_path);
 	cairo_set_source_rgba (cr, 1.,1.,1.,.5);
 	cairo_stroke (cr);
 
-	cairo_surface_write_to_png (surface, "out.png");
+	*out = '\0';
+	strcat (out, out_prefix);
+	strcat (out, filename);
 
+	cairo_surface_write_to_png (cairo_get_target (cr), out);
+	cairo_destroy (cr);
 }
 
 int
 main (int argc, char **argv)
 {
-	if (argc == 1)
+	const char *out_prefix;
+
+	if (argc < 3)
 	{
-	  wave_flag ("GR.png");
-	  return 0;
+	  fprintf (stderr, "Usage: waveflag out-prefix [in.png]...\n");
+	  return 1;
 	}
 
+	out_prefix = argv[1];
+	argc--, argv++;
+
 	for (argc--, argv++; argc; argc--, argv++)
-		wave_flag (*argv);
+		wave_flag (*argv, out_prefix);
 
 	return 0;
 }
