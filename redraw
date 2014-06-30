@@ -1,5 +1,7 @@
 #!/bin/bash
 
+FLAG=GB
+
 >lastcompiled.c
 DIPLAY_PID=
 while true; do
@@ -8,9 +10,9 @@ while true; do
 		continue
 	fi
 	cp waveflag.c lastcompiled.c
-	if gcc -std=c99 -Wall -Wextra lastcompiled.c `pkg-config --cflags --libs cairo` -o waveflag && ./waveflag waved- GB.png; then
+	if gcc -std=c99 -Wall -Wextra lastcompiled.c `pkg-config --cflags --libs cairo` -o waveflag && ./waveflag waved- $FLAG.png; then
 		test -n "$DISPLAY_PID" && kill "$DISPLAY_PID"
-		display waved-GB.png &
+		display waved-$FLAG.png &
 		DISPLAY_PID=$!
 	fi
 done

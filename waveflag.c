@@ -4,11 +4,17 @@
 #include <assert.h>
 #include <string.h>
 
+
+#define SCALE 8
+#define SIZE 128
+static unsigned int debug;
+
 static cairo_path_t *
 wave_path_create (void)
 {
 	cairo_surface_t *surface = cairo_image_surface_create (CAIRO_FORMAT_ARGB32, 0,0);
 	cairo_t *cr = cairo_create (surface);
+	cairo_scale (cr, SCALE, SCALE);
 	cairo_path_t *path;
 
 	cairo_move_to (cr, 127.15,81.52);
@@ -33,6 +39,7 @@ wave_path_create (void)
 	cairo_curve_to (cr, 127.24,85.85,127.79,83.59,127.15,81.52);
 	cairo_close_path (cr);
 
+	cairo_identity_matrix (cr);
 	path = cairo_copy_path (cr);
 	cairo_destroy (cr);
 	cairo_surface_destroy (surface);
@@ -48,12 +55,12 @@ wave_mesh_create (void)
 
 	cairo_mesh_pattern_line_to(pattern,   -1,  43);
 	cairo_mesh_pattern_curve_to(pattern,  30,  -3,
-					      77,  49,
-					     104,   0);
+					      77,  47,
+					     104,   1);
 	cairo_mesh_pattern_line_to(pattern,  129,  85);
-	cairo_mesh_pattern_curve_to(pattern,  78, 138,
-					      46,  80,
-					      7,  128);
+	cairo_mesh_pattern_curve_to(pattern,  80, 138,
+					      50,  80,
+					      7,  127);
 
 	cairo_mesh_pattern_set_corner_color_rgb(pattern, 0, 0, 0, .5);
 	cairo_mesh_pattern_set_corner_color_rgb(pattern, 1, 1, 0, .5);
@@ -61,6 +68,9 @@ wave_mesh_create (void)
 	cairo_mesh_pattern_set_corner_color_rgb(pattern, 3, 0, 1, .5);
 
 	cairo_mesh_pattern_end_patch(pattern);
+
+	cairo_matrix_t scale_matrix = {1./SCALE, 0, 0, 1./SCALE, 0, 0};
+	cairo_pattern_set_matrix (pattern, &scale_matrix);
 	return pattern;
 }
 
@@ -91,22 +101,13 @@ load_scaled_flag (const char *filename)
 	return scaled;
 }
 
-#define SCALE 8
-#define SIZE 128
-#define MARGIN_X 0
-#define MARGIN_Y 0
-
 static cairo_t *
 create_image (void)
 {
 	cairo_surface_t *surface = cairo_image_surface_create (CAIRO_FORMAT_ARGB32,
-							       (SIZE+2*MARGIN_X)*SCALE,
-							       (SIZE+2*MARGIN_Y)*SCALE);
+							       SIZE*SCALE,
+							       SIZE*SCALE);
 	cairo_t *cr = cairo_create (surface);
-
-	cairo_scale (cr, SCALE, SCALE);
-	cairo_translate (cr, MARGIN_X, MARGIN_Y);
-
 	cairo_surface_destroy (surface);
 	return cr;
 }
@@ -159,8 +160,11 @@ texture_map (cairo_surface_t *src, cairo_surface_t *tex)
 			}
 			if (sa != 255)
 			{
-				/* TODO */
+				sr = sr * 255 / sa;
+				sg = sg * 255 / sa;
+				sb = sb * 255 / sa;
 			}
+			assert (sb >= 127 && sb <= 129);
 			d[x] = t[tstride * sg + sr];
 		}
 		s += sstride;
@@ -191,14 +195,41 @@ wave_flag (const char *filename, const char *out_prefix)
 	cairo_surface_destroy (scaled_flag);
 
 	cr = create_image ();
-	cairo_save (cr);
-		cairo_identity_matrix (cr);
-		cairo_set_source_surface (cr, waved_flag, 0, 0);
+
+	cairo_set_source_surface (cr, waved_flag, 0, 0);
+	if (debug)
+	{
 		cairo_paint (cr);
-	cairo_restore (cr);
-	cairo_append_path (cr, wave_path);
-	cairo_set_source_rgba (cr, 1.,1.,1.,.5);
-	cairo_stroke (cr);
+		cairo_append_path (cr, wave_path);
+		cairo_set_source_rgba (cr, 1.,1.,1.,.5);
+		cairo_stroke (cr);
+	}
+	else
+	{
+		cairo_append_path (cr, wave_path);
+		cairo_clip (cr);
+		cairo_paint (cr);
+	}
+
+	if (!debug)
+	{
+		/* Scale down, 2x at a time, to get best downscaling, because cairo's
+		 * downscaling is crap... :( */
+		unsigned int scale = SCALE;
+		while (scale > 1)
+		{
+			scale /= 2;
+			cairo_surface_t *old_surface = cairo_surface_reference (cairo_get_target (cr));
+			cairo_destroy (cr);
+			cairo_surface_t *new_surface = cairo_image_surface_create (CAIRO_FORMAT_ARGB32, SIZE*scale, SIZE*scale);
+			cr = cairo_create (new_surface);
+			cairo_scale (cr, .5, .5);
+			cairo_set_source_surface (cr, old_surface, 0, 0);
+			cairo_paint (cr);
+			cairo_surface_destroy (old_surface);
+			cairo_surface_destroy (new_surface);
+		}
+	}
 
 	*out = '\0';
 	strcat (out, out_prefix);
@@ -215,8 +246,14 @@ main (int argc, char **argv)
 
 	if (argc < 3)
 	{
-	  fprintf (stderr, "Usage: waveflag out-prefix [in.png]...\n");
+	  fprintf (stderr, "Usage: [-debug] waveflag out-prefix [in.png]...\n");
 	  return 1;
+	}
+
+	if (!strcmp (argv[1], "-debug"))
+	{
+	  debug = 1;
+	  argc--, argv++;
 	}
 
 	out_prefix = argv[1];
