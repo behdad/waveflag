@@ -1,0 +1,21 @@
+#!/bin/bash
+
+>lastcompiled.c
+DIPLAY_PID=
+while true; do
+	sleep .05
+	if diff -u lastcompiled.c waveflag.c; then
+		continue
+	fi
+	if 
+		cp waveflag.c compiling.c &&
+		gcc compiling.c `pkg-config --cflags --libs cairo` -o compiling &&
+		mv compiling waveflag &&
+		mv compiling.c lastcompiled.c
+		./waveflag; then
+
+		test -n "$DISPLAY_PID" && kill "$DISPLAY_PID"
+		display out.png &
+		DISPLAY_PID=$!
+	fi
+done
