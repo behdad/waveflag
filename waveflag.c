@@ -1,8 +1,12 @@
 #include <cairo.h>
 
-static void
-outline_path (cairo_t *cr)
+static cairo_path_t *
+wave_path_create (void)
 {
+	cairo_surface_t *surface = cairo_image_surface_create (CAIRO_FORMAT_ARGB32, 0,0);
+	cairo_t *cr = cairo_create (surface);
+	cairo_path_t *path;
+
 	cairo_move_to (cr, 127.15,81.52);
 	cairo_rel_line_to (cr, -20.51,-66.94);
 	cairo_rel_curve_to (cr, -0.61,-2,-2.22,-3.53,-4.25,-4.03);
@@ -24,22 +28,28 @@ outline_path (cairo_t *cr)
 	cairo_rel_curve_to (cr, 18.93,0,32.93,-6.1,46.82,-20.38);
 	cairo_curve_to (cr, 127.24,85.85,127.79,83.59,127.15,81.52);
 	cairo_close_path (cr);
+
+	path = cairo_copy_path (cr);
+	cairo_destroy (cr);
+	cairo_surface_destroy (surface);
+
+	return path;
 }
 
 static cairo_pattern_t *
-mesh_create (void)
+wave_mesh_create (void)
 {
 	cairo_pattern_t *pattern = cairo_pattern_create_mesh();
 	cairo_mesh_pattern_begin_patch(pattern);
 
 	cairo_mesh_pattern_line_to(pattern,   -1,  43);
-	cairo_mesh_pattern_curve_to(pattern,  32,  -4,
-					      77,  48,
+	cairo_mesh_pattern_curve_to(pattern,  30,  -3,
+					      77,  49,
 					     104,   0);
 	cairo_mesh_pattern_line_to(pattern,  129,  85);
 	cairo_mesh_pattern_curve_to(pattern,  78, 138,
-					      53,  80,
-					      8,  126);
+					      46,  80,
+					      7,  128);
 
 	cairo_mesh_pattern_set_corner_color_rgb(pattern, 0, 0, 0, .5);
 	cairo_mesh_pattern_set_corner_color_rgb(pattern, 1, 1, 0, .5);
@@ -56,13 +66,21 @@ mesh_create (void)
 #define MARGIN_X 1
 #define MARGIN_Y 1
 
-int
-main (int argc, char **argv)
+void
+wave_flag (const char *filename)
 {
+	static cairo_path_t *wave_path;
+	static	cairo_pattern_t *wave_mesh;
+
 	cairo_surface_t *surface;
-	cairo_pattern_t *mesh;
 	cairo_t *cr;
-	
+
+	if (!wave_path)
+		wave_path = wave_path_create ();
+	if (!wave_mesh)
+		wave_mesh = wave_mesh_create ();
+
+
 	surface = cairo_image_surface_create (CAIRO_FORMAT_ARGB32,
 					      (SIZE+2*MARGIN_X)*SCALE,
 					      (SIZE+2*MARGIN_Y)*SCALE);
@@ -70,16 +88,28 @@ main (int argc, char **argv)
 	cairo_scale (cr, SCALE, SCALE);
 	cairo_translate (cr, MARGIN_X, MARGIN_Y);
 
-	mesh = mesh_create ();
-	cairo_set_source (cr, mesh);
-	cairo_pattern_destroy (mesh);
+	cairo_set_source (cr, wave_mesh);
 
 	cairo_paint (cr);
-	outline_path (cr);
+	cairo_append_path (cr, wave_path);
 	cairo_set_source_rgba (cr, 1.,1.,1.,.5);
 	cairo_stroke (cr);
 
 	cairo_surface_write_to_png (surface, "out.png");
+
+}
+
+int
+main (int argc, char **argv)
+{
+	if (argc == 1)
+	{
+	  wave_flag ("GR.png");
+	  return 0;
+	}
+
+	for (argc--, argv++; argc; argc--, argv++)
+		wave_flag (*argv);
 
 	return 0;
 }
