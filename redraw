@@ -1,5 +1,10 @@
 #!/bin/bash
 
+DEBUG=
+if test "x$1" = x-debug; then
+	DEBUG=-debug
+	shift
+fi
 FLAG=$1
 test "x$FLAG" = x && FLAG=GB
 
@@ -11,7 +16,7 @@ while true; do
 		continue
 	fi
 	cp waveflag.c lastcompiled.c
-	if gcc -std=c99 -Wall -Wextra lastcompiled.c `pkg-config --cflags --libs cairo` -o waveflag && ./waveflag waved- $FLAG.png; then
+	if gcc -std=c99 -Wall -Wextra lastcompiled.c `pkg-config --cflags --libs cairo` -o waveflag && ./waveflag $DEBUG waved- $FLAG.png; then
 		test -n "$DISPLAY_PID" && kill "$DISPLAY_PID"
 		display waved-$FLAG.png &
 		DISPLAY_PID=$!
