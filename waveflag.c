@@ -289,7 +289,6 @@ wave_flag (const char *filename, const char *out_prefix)
 			double border_alpha = 2 * fabs (.5 - border_luminosity);
 			double border_width = 4 * SCALE;
 			double border_gray = (1 - border_luminosity) * border_alpha;
-			printf ("border %g %g %g\n", border_alpha, border_gray, border_width);
 			cairo_set_source_rgba (cr, border_gray, border_gray, border_gray, border_alpha);
 			cairo_set_line_width (cr, border_width);
 			cairo_stroke (cr);
