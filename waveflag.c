@@ -273,15 +273,13 @@ wave_flag (const char *filename, const char *out_prefix)
 
 	cairo_set_source_surface (cr, waved_flag, 0, 0);
 	cairo_append_path (cr, wave_path);
-	cairo_save (cr);
 	if (!debug)
 		cairo_clip_preserve (cr);
 	cairo_paint (cr);
-	cairo_restore (cr);
 	if (!border_transparent)
 	{
 		double border_alpha = .5 + fabs (.5 - border_luminosity);
-		double border_width = 2 * SCALE;
+		double border_width = 3 * SCALE;
 		double border_gray = (1 - border_luminosity) * border_alpha;
 		if (debug)
 			printf ("Border: alpha %g width %g gray %g\n",
@@ -289,6 +287,7 @@ wave_flag (const char *filename, const char *out_prefix)
 
 		cairo_set_source_rgba (cr, border_gray, border_gray, border_gray, border_alpha);
 		cairo_set_line_width (cr, border_width);
+		cairo_set_operator (cr, CAIRO_OPERATOR_HSL_LUMINOSITY);
 		cairo_stroke (cr);
 	}
 	else
