@@ -1,4 +1,5 @@
 #include <cairo.h>
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <assert.h>
@@ -14,8 +15,9 @@ wave_path_create (void)
 {
 	cairo_surface_t *surface = cairo_image_surface_create (CAIRO_FORMAT_ARGB32, 0,0);
 	cairo_t *cr = cairo_create (surface);
-	cairo_scale (cr, SCALE, SCALE);
 	cairo_path_t *path;
+
+	cairo_scale (cr, SCALE, SCALE);
 
 	cairo_move_to (cr, 127.15,81.52);
 	cairo_rel_line_to (cr, -20.51,-66.94);
@@ -51,6 +53,8 @@ static cairo_pattern_t *
 wave_mesh_create (void)
 {
 	cairo_pattern_t *pattern = cairo_pattern_create_mesh();
+	cairo_matrix_t scale_matrix = {1./SCALE, 0, 0, 1./SCALE, 0, 0};
+	cairo_pattern_set_matrix (pattern, &scale_matrix);
 	cairo_mesh_pattern_begin_patch(pattern);
 
 	cairo_mesh_pattern_line_to(pattern,   -1,  43);
@@ -69,8 +73,6 @@ wave_mesh_create (void)
 
 	cairo_mesh_pattern_end_patch(pattern);
 
-	cairo_matrix_t scale_matrix = {1./SCALE, 0, 0, 1./SCALE, 0, 0};
-	cairo_pattern_set_matrix (pattern, &scale_matrix);
 	return pattern;
 }
 
@@ -100,6 +102,73 @@ load_scaled_flag (const char *filename)
 	cairo_surface_t *scaled = scale_flag (flag);
 	cairo_surface_destroy (flag);
 	return scaled;
+}
+
+/* Returns 65536 for luminosoty of 1.0. */
+static int
+luminosity (uint32_t pix)
+{
+	unsigned int sr = (pix >> 16) & 0xFF;
+	unsigned int sg = (pix >>  8) & 0xFF;
+	unsigned int sb = (pix      ) & 0xFF;
+
+	/* Apply gamma of 2.0 */
+	sr = sr * sr;
+	sg = sg * sg;
+	sb = sb * sb;
+
+	return  (sr * 13933u /* 0.2126 * 65536 */ +
+		 sg * 46871u /* 0.7152 * 65536 */ +
+		 sb *  4731u /* 0.0722 * 65536 */) / (255*255);
+}
+
+/* Returns luminosity. Only miningul if pixel is opaque.
+ * If pixel is not opaque, sets *transparent to 1. */
+static int
+luminosity_and_transparency (uint32_t pix, int *transparent)
+{
+	if ((pix>>24) < 0xff)
+	{
+		*transparent = 1;
+		return 0;
+	}
+	return luminosity (pix);
+}
+
+static double
+calculate_border_luminosity_and_transparency (cairo_surface_t *scaled_flag,
+					      int *transparent)
+{
+	uint32_t *s = (uint32_t *) cairo_image_surface_get_data (scaled_flag);
+	unsigned int width  = cairo_image_surface_get_width (scaled_flag);
+	unsigned int height = cairo_image_surface_get_height (scaled_flag);
+	unsigned int sstride = cairo_image_surface_get_stride (scaled_flag) / 4;
+
+	unsigned int luma = 0;
+	unsigned int perimeter = (2 * (width + height - 2));
+
+	*transparent = 0;
+
+	for (unsigned int x = 0; x < width; x++)
+		luma += luminosity_and_transparency (s[x], transparent);
+	s += sstride;
+	for (unsigned int y = 1; y < height - 1; y++)
+	{
+		luma += luminosity_and_transparency (s[0], transparent);
+		luma += luminosity_and_transparency (s[width - 1], transparent);
+		s += sstride;
+	}
+	for (unsigned int x = 0; x < width; x++)
+		luma += luminosity_and_transparency (s[x], transparent);
+
+	if (*transparent)
+	{
+		/* Flag is non-rectangular; eg. Nepal.
+		 * Don't draw a border. */
+		return 0;
+	}
+
+	return luma / (65536. * perimeter);
 }
 
 static cairo_t *
@@ -181,6 +250,8 @@ wave_flag (const char *filename, const char *out_prefix)
 {
 	static cairo_path_t *wave_path;
 	static cairo_surface_t *wave_surface;
+	double border_luminosity;
+	int border_transparent;
 	char out[1000];
 
 	cairo_surface_t *scaled_flag, *waved_flag;
@@ -191,7 +262,10 @@ wave_flag (const char *filename, const char *out_prefix)
 	if (!wave_surface)
 		wave_surface = wave_surface_create ();
 
+	printf ("Processing %s\n", filename);
+
 	scaled_flag = load_scaled_flag (filename);
+	border_luminosity = calculate_border_luminosity_and_transparency (scaled_flag, &border_transparent);
 	waved_flag = texture_map (wave_surface, scaled_flag);
 	cairo_surface_destroy (scaled_flag);
 
@@ -210,9 +284,18 @@ wave_flag (const char *filename, const char *out_prefix)
 		cairo_append_path (cr, wave_path);
 		cairo_clip_preserve (cr);
 		cairo_paint (cr);
-		cairo_set_source_rgba (cr, .5,.5,.5,.5);
-		cairo_set_line_width (cr, 3*SCALE);
-		cairo_stroke (cr);
+		if (!border_transparent)
+		{
+			double border_alpha = 2 * fabs (.5 - border_luminosity);
+			double border_width = 4 * SCALE * border_alpha;
+			double border_gray = (1 - border_luminosity) * border_alpha;
+			printf ("border %g %g %g\n", border_alpha, border_gray, border_width);
+			cairo_set_source_rgba (cr, border_gray, border_gray, border_gray, border_alpha);
+			cairo_set_line_width (cr, border_width);
+			cairo_stroke (cr);
+		}
+		else
+			cairo_new_path (cr);
 	}
 
 	if (!debug)
@@ -222,10 +305,13 @@ wave_flag (const char *filename, const char *out_prefix)
 		unsigned int scale = SCALE;
 		while (scale > 1)
 		{
+			cairo_surface_t *old_surface, *new_surface;
+
+			old_surface = cairo_surface_reference (cairo_get_target (cr));
+			assert (scale % 2 == 0);
 			scale /= 2;
-			cairo_surface_t *old_surface = cairo_surface_reference (cairo_get_target (cr));
 			cairo_destroy (cr);
-			cairo_surface_t *new_surface = cairo_image_surface_create (CAIRO_FORMAT_ARGB32, SIZE*scale, SIZE*scale);
+			new_surface = cairo_image_surface_create (CAIRO_FORMAT_ARGB32, SIZE*scale, SIZE*scale);
 			cr = cairo_create (new_surface);
 			cairo_scale (cr, .5, .5);
 			cairo_set_source_surface (cr, old_surface, 0, 0);
