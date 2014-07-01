@@ -272,30 +272,27 @@ wave_flag (const char *filename, const char *out_prefix)
 	cr = create_image ();
 
 	cairo_set_source_surface (cr, waved_flag, 0, 0);
-	if (debug)
+	cairo_append_path (cr, wave_path);
+	cairo_save (cr);
+	if (!debug)
+		cairo_clip_preserve (cr);
+	cairo_paint (cr);
+	cairo_restore (cr);
+	if (!border_transparent)
 	{
-		cairo_paint (cr);
-		cairo_append_path (cr, wave_path);
-		cairo_set_source_rgba (cr, 1.,1.,1.,.5);
+		double border_alpha = .5 + fabs (.5 - border_luminosity);
+		double border_width = 2 * SCALE;
+		double border_gray = (1 - border_luminosity) * border_alpha;
+		if (debug)
+			printf ("Border: alpha %g width %g gray %g\n",
+				border_alpha, border_width/SCALE, border_gray);
+
+		cairo_set_source_rgba (cr, border_gray, border_gray, border_gray, border_alpha);
+		cairo_set_line_width (cr, border_width);
 		cairo_stroke (cr);
 	}
 	else
-	{
-		cairo_append_path (cr, wave_path);
-		cairo_clip_preserve (cr);
-		cairo_paint (cr);
-		if (!border_transparent)
-		{
-			double border_alpha = 2 * fabs (.5 - border_luminosity);
-			double border_width = 4 * SCALE;
-			double border_gray = (1 - border_luminosity) * border_alpha;
-			cairo_set_source_rgba (cr, border_gray, border_gray, border_gray, border_alpha);
-			cairo_set_line_width (cr, border_width);
-			cairo_stroke (cr);
-		}
-		else
-			cairo_new_path (cr);
-	}
+		cairo_new_path (cr);
 
 	if (!debug)
 	{
