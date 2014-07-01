@@ -287,7 +287,7 @@ wave_flag (const char *filename, const char *out_prefix)
 		if (!border_transparent)
 		{
 			double border_alpha = 2 * fabs (.5 - border_luminosity);
-			double border_width = 4 * SCALE * border_alpha;
+			double border_width = 4 * SCALE;
 			double border_gray = (1 - border_luminosity) * border_alpha;
 			printf ("border %g %g %g\n", border_alpha, border_gray, border_width);
 			cairo_set_source_rgba (cr, border_gray, border_gray, border_gray, border_alpha);
