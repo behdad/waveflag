@@ -207,8 +207,11 @@ wave_flag (const char *filename, const char *out_prefix)
 	else
 	{
 		cairo_append_path (cr, wave_path);
-		cairo_clip (cr);
+		cairo_clip_preserve (cr);
 		cairo_paint (cr);
+		cairo_set_source_rgba (cr, .5,.5,.5,.5);
+		cairo_set_line_width (cr, 3*SCALE);
+		cairo_stroke (cr);
 	}
 
 	if (!debug)

@@ -1,6 +1,7 @@
 #!/bin/bash
 
-FLAG=GB
+FLAG=$1
+test "x$FLAG" = x && FLAG=GB
 
 >lastcompiled.c
 DIPLAY_PID=
