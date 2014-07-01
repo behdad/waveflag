@@ -86,6 +86,7 @@ scale_flag (cairo_surface_t *flag)
 
 	cairo_set_source_surface (cr, flag, 0, 0);
 	cairo_pattern_set_filter (cairo_get_source (cr), CAIRO_FILTER_BEST);
+	cairo_pattern_set_extend (cairo_get_source (cr), CAIRO_EXTEND_PAD);
 	cairo_paint (cr);
 
 	cairo_destroy (cr);
