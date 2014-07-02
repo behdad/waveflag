@@ -57,9 +57,9 @@ static struct { double x, y; } mesh_points[] =
   { 30,  -3},
   { 77,  47},
   {104,   1},
-  {129,  85},
-  { 80, 138},
-  { 50,  80},
+  {130,  84},
+  {100, 138},
+  { 45,  80},
   {  7, 127},
 };
 #define M(i) mesh_points[i].x, mesh_points[i].y
@@ -305,7 +305,8 @@ wave_flag (const char *filename, const char *out_prefix)
 		cairo_save (cr);
 		cairo_set_source_rgba (cr, border_gray, border_gray, border_gray, border_alpha);
 		cairo_set_line_width (cr, border_width);
-		cairo_set_operator (cr, CAIRO_OPERATOR_HSL_LUMINOSITY);
+		if (!debug)
+			cairo_set_operator (cr, CAIRO_OPERATOR_HSL_LUMINOSITY);
 		cairo_stroke (cr);
 		cairo_restore (cr);
 	}
