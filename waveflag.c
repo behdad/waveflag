@@ -8,6 +8,8 @@
 
 #define SCALE 8
 #define SIZE 128
+#define MARGIN (debug ? 24 : 0)
+
 static unsigned int debug;
 
 static cairo_path_t *
@@ -49,6 +51,19 @@ wave_path_create (void)
 	return path;
 }
 
+static struct { double x, y; } mesh_points[] =
+{
+  { -1,  43},
+  { 30,  -3},
+  { 77,  47},
+  {104,   1},
+  {129,  85},
+  { 80, 138},
+  { 50,  80},
+  {  7, 127},
+};
+#define M(i) mesh_points[i].x, mesh_points[i].y
+
 static cairo_pattern_t *
 wave_mesh_create (void)
 {
@@ -57,14 +72,10 @@ wave_mesh_create (void)
 	cairo_pattern_set_matrix (pattern, &scale_matrix);
 	cairo_mesh_pattern_begin_patch(pattern);
 
-	cairo_mesh_pattern_line_to(pattern,   -1,  43);
-	cairo_mesh_pattern_curve_to(pattern,  30,  -3,
-					      77,  47,
-					     104,   1);
-	cairo_mesh_pattern_line_to(pattern,  129,  85);
-	cairo_mesh_pattern_curve_to(pattern,  80, 138,
-					      50,  80,
-					      7,  127);
+	cairo_mesh_pattern_line_to(pattern,   M(0));
+	cairo_mesh_pattern_curve_to(pattern,  M(1), M(2), M(3));
+	cairo_mesh_pattern_line_to(pattern,   M(4));
+	cairo_mesh_pattern_curve_to(pattern,  M(5), M(6), M(7));
 
 	cairo_mesh_pattern_set_corner_color_rgb(pattern, 0, 0, 0, .5);
 	cairo_mesh_pattern_set_corner_color_rgb(pattern, 1, 1, 0, .5);
@@ -180,8 +191,8 @@ static cairo_t *
 create_image (void)
 {
 	cairo_surface_t *surface = cairo_image_surface_create (CAIRO_FORMAT_ARGB32,
-							       SIZE*SCALE,
-							       SIZE*SCALE);
+							       (SIZE+2*MARGIN)*SCALE,
+							       (SIZE+2*MARGIN)*SCALE);
 	cairo_t *cr = cairo_create (surface);
 	cairo_surface_destroy (surface);
 	return cr;
@@ -275,6 +286,7 @@ wave_flag (const char *filename, const char *out_prefix)
 	cairo_surface_destroy (scaled_flag);
 
 	cr = create_image ();
+	cairo_translate (cr, SCALE * MARGIN, SCALE * MARGIN);
 
 	cairo_set_source_surface (cr, waved_flag, 0, 0);
 	cairo_append_path (cr, wave_path);
@@ -290,15 +302,43 @@ wave_flag (const char *filename, const char *out_prefix)
 			printf ("Border: alpha %g width %g gray %g\n",
 				border_alpha, border_width/SCALE, border_gray);
 
+		cairo_save (cr);
 		cairo_set_source_rgba (cr, border_gray, border_gray, border_gray, border_alpha);
 		cairo_set_line_width (cr, border_width);
 		cairo_set_operator (cr, CAIRO_OPERATOR_HSL_LUMINOSITY);
 		cairo_stroke (cr);
+		cairo_restore (cr);
 	}
 	else
 	{
 		printf ("Transparent border\n");
 		cairo_new_path (cr);
+	}
+
+	if (debug)
+	{
+		/* Draw mesh points. */
+		cairo_save (cr);
+		cairo_scale (cr, SCALE, SCALE);
+		cairo_set_source_rgba (cr, .5,.0,.0,.9);
+		cairo_set_line_cap (cr, CAIRO_LINE_CAP_ROUND);
+		for (unsigned int i = 0; i < sizeof (mesh_points) / sizeof (mesh_points[0]); i++)
+		{
+			cairo_move_to (cr, M(i));
+			cairo_rel_line_to (cr, 0, 0);
+		}
+		cairo_set_line_width (cr, 2);
+		cairo_stroke (cr);
+		for (unsigned int i = 0; i < 4; i++)
+		{
+			cairo_move_to (cr, M(2*i));
+			cairo_line_to (cr, M(2*i+1));
+			cairo_move_to (cr, M(2*i));
+			cairo_line_to (cr, M(7 - 2*i));
+		}
+		cairo_set_line_width (cr, .5);
+		cairo_stroke (cr);
+		cairo_restore (cr);
 	}
 
 	if (!debug)
@@ -314,7 +354,7 @@ wave_flag (const char *filename, const char *out_prefix)
 			assert (scale % 2 == 0);
 			scale /= 2;
 			cairo_destroy (cr);
-			new_surface = cairo_image_surface_create (CAIRO_FORMAT_ARGB32, SIZE*scale, SIZE*scale);
+			new_surface = cairo_image_surface_create (CAIRO_FORMAT_ARGB32, (SIZE+2*MARGIN)*scale, (SIZE+2*MARGIN)*scale);
 			cr = cairo_create (new_surface);
 			cairo_scale (cr, .5, .5);
 			cairo_set_source_surface (cr, old_surface, 0, 0);
