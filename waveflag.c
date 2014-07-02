@@ -139,26 +139,31 @@ static double
 calculate_border_luminosity_and_transparency (cairo_surface_t *scaled_flag,
 					      int *transparent)
 {
+	/* Some flags might have a border already.  As such, skip
+	 * a few pixels on each side... */
+	const unsigned int skip = 5;
 	uint32_t *s = (uint32_t *) cairo_image_surface_get_data (scaled_flag);
 	unsigned int width  = cairo_image_surface_get_width (scaled_flag);
 	unsigned int height = cairo_image_surface_get_height (scaled_flag);
 	unsigned int sstride = cairo_image_surface_get_stride (scaled_flag) / 4;
 
 	unsigned int luma = 0;
-	unsigned int perimeter = (2 * (width + height - 2));
+	unsigned int perimeter = (2 * ((width-2*skip) + (height-2*skip) - 2));
+
+	assert (width > 2 * skip && height > 2 * skip);
 
 	*transparent = 0;
 
-	for (unsigned int x = 0; x < width; x++)
+	for (unsigned int x = skip; x < width - skip; x++)
 		luma += luminosity_and_transparency (s[x], transparent);
 	s += sstride;
-	for (unsigned int y = 1; y < height - 1; y++)
+	for (unsigned int y = 1 + skip; y < height - 1 - skip; y++)
 	{
-		luma += luminosity_and_transparency (s[0], transparent);
-		luma += luminosity_and_transparency (s[width - 1], transparent);
+		luma += luminosity_and_transparency (s[skip], transparent);
+		luma += luminosity_and_transparency (s[width - 1 - skip], transparent);
 		s += sstride;
 	}
-	for (unsigned int x = 0; x < width; x++)
+	for (unsigned int x = skip; x < width - skip; x++)
 		luma += luminosity_and_transparency (s[x], transparent);
 
 	if (*transparent)
@@ -291,7 +296,10 @@ wave_flag (const char *filename, const char *out_prefix)
 		cairo_stroke (cr);
 	}
 	else
+	{
+		printf ("Transparent border\n");
 		cairo_new_path (cr);
+	}
 
 	if (!debug)
 	{
