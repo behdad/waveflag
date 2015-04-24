@@ -1,3 +1,21 @@
+/*
+ * Copyright 2014 Google Inc. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * Google contributors: Behdad Esfahbod
+ */
+
 #include <cairo.h>
 #include <math.h>
 #include <stdint.h>
@@ -8,7 +26,7 @@
 
 #define SCALE 8
 #define SIZE 128
-#define MARGIN (debug ? 24 : 0)
+#define MARGIN (debug ? 4 : 0)
 
 static unsigned int debug;
 
@@ -19,7 +37,7 @@ wave_path_create (void)
 	cairo_t *cr = cairo_create (surface);
 	cairo_path_t *path;
 
-	cairo_scale (cr, SCALE, SCALE);
+	cairo_scale (cr, SIZE/128.*SCALE, SIZE/128.*SCALE);
 
 	cairo_move_to (cr, 127.15,81.52);
 	cairo_rel_line_to (cr, -20.51,-66.94);
@@ -68,7 +86,7 @@ static cairo_pattern_t *
 wave_mesh_create (void)
 {
 	cairo_pattern_t *pattern = cairo_pattern_create_mesh();
-	cairo_matrix_t scale_matrix = {1./SCALE, 0, 0, 1./SCALE, 0, 0};
+	cairo_matrix_t scale_matrix = {128./SIZE/SCALE, 0, 0, 128./SIZE/SCALE, 0, 0};
 	cairo_pattern_set_matrix (pattern, &scale_matrix);
 	cairo_mesh_pattern_begin_patch(pattern);
 
@@ -320,7 +338,7 @@ wave_flag (const char *filename, const char *out_prefix)
 	{
 		/* Draw mesh points. */
 		cairo_save (cr);
-		cairo_scale (cr, SCALE, SCALE);
+		cairo_scale (cr, SIZE/128.*SCALE, SIZE/128.*SCALE);
 		cairo_set_source_rgba (cr, .5,.0,.0,.9);
 		cairo_set_line_cap (cr, CAIRO_LINE_CAP_ROUND);
 		for (unsigned int i = 0; i < sizeof (mesh_points) / sizeof (mesh_points[0]); i++)
