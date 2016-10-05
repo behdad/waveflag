@@ -30,6 +30,22 @@
 
 static unsigned int debug;
 
+#define top 21
+#define bot 128-top
+#define B 27
+static struct { double x, y; } mesh_points[] =
+{
+  {  1, top},
+  { 43, top-B},
+  { 85, top+B},
+  {127, top},
+  {127, bot},
+  { 85, bot+B},
+  { 43, bot-B},
+  {  1, bot},
+};
+#define M(i) mesh_points[i].x, mesh_points[i].y
+
 static cairo_path_t *
 wave_path_create (void)
 {
@@ -39,26 +55,10 @@ wave_path_create (void)
 
 	cairo_scale (cr, SIZE/128.*SCALE, SIZE/128.*SCALE);
 
-	cairo_move_to (cr, 127.15,81.52);
-	cairo_rel_line_to (cr, -20.51,-66.94);
-	cairo_rel_curve_to (cr, -0.61,-2,-2.22,-3.53,-4.25,-4.03);
-	cairo_rel_curve_to (cr, -0.48,-0.12,-0.96,-0.18,-1.44,-0.18);
-	cairo_rel_curve_to (cr, -1.56,0,-3.07,0.61,-4.2,1.74);
-	cairo_rel_curve_to (cr, -9.56,9.56,-17.94,11.38,-30.07,11.38);
-	cairo_rel_curve_to (cr, -3.68,0,-7.72,-0.18,-11.99,-0.38);
-	cairo_rel_curve_to (cr, -3.37,-0.15,-6.85,-0.31,-10.62,-0.4);
-	cairo_rel_curve_to (cr, -0.66,-0.02,-1.31,-0.02,-1.95,-0.02);
-	cairo_rel_curve_to (cr, -30.67,0,-40.49,18.56,-40.89,19.35);
-	cairo_rel_curve_to (cr, -0.52,1.01,-0.73,2.16,-0.62,3.29);
-	cairo_rel_line_to (cr, 6.72,66.95);
-	cairo_rel_curve_to (cr, 0.22,2.22,1.67,4.13,3.75,4.95);
-	cairo_rel_curve_to (cr, 0.7,0.27,1.43,0.4,2.16,0.4);
-	cairo_rel_curve_to (cr, 1.43,0,2.84,-0.52,3.95,-1.5);
-	cairo_rel_curve_to (cr, 0.1,-0.09,12.42,-10.63,32.13,-10.63);
-	cairo_rel_curve_to (cr, 2.52,0,5.09,0.17,7.64,0.51);
-	cairo_rel_curve_to (cr, 9.27,1.23,16.03,1.78,21.95,1.78);
-	cairo_rel_curve_to (cr, 18.93,0,32.93,-6.1,46.82,-20.38);
-	cairo_curve_to (cr, 127.24,85.85,127.79,83.59,127.15,81.52);
+	cairo_line_to(cr,   M(0));
+	cairo_curve_to(cr,  M(1), M(2), M(3));
+	cairo_line_to(cr,   M(4));
+	cairo_curve_to(cr,  M(5), M(6), M(7));
 	cairo_close_path (cr);
 
 	cairo_identity_matrix (cr);
@@ -68,19 +68,6 @@ wave_path_create (void)
 
 	return path;
 }
-
-static struct { double x, y; } mesh_points[] =
-{
-  { -1,  43},
-  { 30,  -3},
-  { 77,  47},
-  {104,   1},
-  {130,  84},
-  {100, 138},
-  { 45,  80},
-  {  7, 127},
-};
-#define M(i) mesh_points[i].x, mesh_points[i].y
 
 static cairo_pattern_t *
 wave_mesh_create (void)
@@ -306,25 +293,32 @@ wave_flag (const char *filename, const char *out_prefix)
 	cr = create_image ();
 	cairo_translate (cr, SCALE * MARGIN, SCALE * MARGIN);
 
+	// Paint waved flag
 	cairo_set_source_surface (cr, waved_flag, 0, 0);
 	cairo_append_path (cr, wave_path);
 	if (!debug)
 		cairo_clip_preserve (cr);
 	cairo_paint (cr);
+
+	// Paint border
 	if (!border_transparent)
 	{
-		double border_alpha = .5 + fabs (.5 - border_luminosity);
-		double border_width = 3 * SCALE;
-		double border_gray = (1 - border_luminosity) * border_alpha;
+		double border_alpha = .2;//.5 + fabs (.5 - border_luminosity);
+		double border_width = 4 * SCALE;
+		double border_gray = 0x42/255.;//(1 - border_luminosity);
 		if (debug)
 			printf ("Border: alpha %g width %g gray %g\n",
 				border_alpha, border_width/SCALE, border_gray);
 
 		cairo_save (cr);
-		cairo_set_source_rgba (cr, border_gray, border_gray, border_gray, border_alpha);
-		cairo_set_line_width (cr, border_width);
+		cairo_set_source_rgba (cr,
+				       border_gray * border_alpha,
+				       border_gray * border_alpha,
+				       border_gray * border_alpha,
+				       border_alpha);
+		cairo_set_line_width (cr, 2*border_width);
 		if (!debug)
-			cairo_set_operator (cr, CAIRO_OPERATOR_HSL_LUMINOSITY);
+			cairo_set_operator (cr, CAIRO_OPERATOR_MULTIPLY);
 		cairo_stroke (cr);
 		cairo_restore (cr);
 	}
@@ -332,6 +326,17 @@ wave_flag (const char *filename, const char *out_prefix)
 	{
 		printf ("Transparent border\n");
 		cairo_new_path (cr);
+	}
+
+	// Paint shade gradient
+	{
+		cairo_pattern_t *gradient = cairo_pattern_create_linear (0, 0,
+									 128*SCALE,128*SCALE);
+		cairo_pattern_add_color_stop_rgba (gradient, 0, 0, 0, 0, 0);
+		cairo_pattern_add_color_stop_rgba (gradient, 1, 0, 0, 0, .2);
+		cairo_set_source (cr, gradient);
+		cairo_paint (cr);
+
 	}
 
 	if (debug)
@@ -398,7 +403,7 @@ main (int argc, char **argv)
 
 	if (argc < 3)
 	{
-	  fprintf (stderr, "Usage: [-debug] waveflag out-prefix [in.png]...\n");
+	  fprintf (stderr, "Usage: waveflag [-debug] out-prefix [in.png]...\n");
 	  return 1;
 	}
 
