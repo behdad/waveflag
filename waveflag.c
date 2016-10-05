@@ -294,13 +294,25 @@ wave_flag (const char *filename, const char *out_prefix)
 
 	// Paint shade gradient
 	{
+		cairo_save (cr);
 		cairo_pattern_t *gradient = cairo_pattern_create_linear (0, 0,
 									 128*SCALE,128*SCALE);
 		cairo_pattern_add_color_stop_rgba (gradient, 0, 0, 0, 0, 0);
-		cairo_pattern_add_color_stop_rgba (gradient, 1, 0, 0, 0, .2);
+		cairo_pattern_add_color_stop_rgba (gradient, 1, 0, 0, 0, 1);
 		cairo_set_source (cr, gradient);
-		cairo_paint (cr);
 
+		if (border_transparent)
+		{
+			cairo_set_operator (cr, CAIRO_OPERATOR_ATOP);
+			cairo_paint_with_alpha (cr, .3);
+		}
+		else
+		{
+			cairo_set_operator (cr, CAIRO_OPERATOR_SOFT_LIGHT);
+			cairo_paint (cr);
+		}
+
+		cairo_restore (cr);
 	}
 
 	if (debug)
