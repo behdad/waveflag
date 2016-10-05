@@ -30,6 +30,7 @@
 
 static unsigned int debug;
 
+#define std_aspect (5./3.)
 #define top 21
 #define bot 128-top
 #define B 27
@@ -44,10 +45,21 @@ static struct { double x, y; } mesh_points[] =
   { 43, bot-B},
   {  1, bot},
 };
-#define M(i) mesh_points[i].x, mesh_points[i].y
+#define M(i) \
+	x_aspect (mesh_points[i].x, aspect), \
+	y_aspect (mesh_points[i].y, aspect)
+
+static inline double x_aspect (double v, double aspect)
+{
+	return aspect >= 1. ? v : (v - 64) * aspect + 64;
+}
+static inline double y_aspect (double v, double aspect)
+{
+	return aspect <= 1. ? v : (v - 64) / aspect + 64;
+}
 
 static cairo_path_t *
-wave_path_create (void)
+wave_path_create (double aspect)
 {
 	cairo_surface_t *surface = cairo_image_surface_create (CAIRO_FORMAT_ARGB32, 0,0);
 	cairo_t *cr = cairo_create (surface);
@@ -70,7 +82,7 @@ wave_path_create (void)
 }
 
 static cairo_pattern_t *
-wave_mesh_create (int alpha)
+wave_mesh_create (double aspect, int alpha)
 {
 	cairo_pattern_t *pattern = cairo_pattern_create_mesh();
 	cairo_matrix_t scale_matrix = {128./SIZE/SCALE, 0, 0, 128./SIZE/SCALE, 0, 0};
@@ -122,9 +134,11 @@ scale_flag (cairo_surface_t *flag)
 }
 
 static cairo_surface_t *
-load_scaled_flag (const char *filename)
+load_scaled_flag (const char *filename, double *aspect)
 {
 	cairo_surface_t *flag = cairo_image_surface_create_from_png (filename);
+	*aspect = (double) cairo_image_surface_get_width (flag) /
+		  (double) cairo_image_surface_get_height (flag);
 	cairo_surface_t *scaled = scale_flag (flag);
 	cairo_surface_destroy (flag);
 	return scaled;
@@ -179,11 +193,11 @@ create_image (void)
 }
 
 static cairo_surface_t *
-wave_surface_create (void)
+wave_surface_create (double aspect)
 {
 	cairo_t *cr = create_image ();
 	cairo_surface_t *surface = cairo_surface_reference (cairo_get_target (cr));
-	cairo_pattern_t *mesh = wave_mesh_create (0);
+	cairo_pattern_t *mesh = wave_mesh_create (aspect, 0);
 	cairo_set_source (cr, mesh);
 	cairo_paint (cr);
 	cairo_pattern_destroy (mesh);
@@ -244,22 +258,45 @@ texture_map (cairo_surface_t *src, cairo_surface_t *tex)
 static void
 wave_flag (const char *filename, const char *out_prefix)
 {
-	static cairo_path_t *wave_path;
-	static cairo_surface_t *wave_surface;
+	static cairo_path_t *standard_wave_path;
+	static cairo_surface_t *standard_wave_surface;
+	cairo_path_t *wave_path;
+	cairo_surface_t *wave_surface;
 	int border_transparent;
 	char out[1000];
+	double aspect = 0;
 
 	cairo_surface_t *scaled_flag, *waved_flag;
 	cairo_t *cr;
 
-	if (!wave_path)
-		wave_path = wave_path_create ();
-	if (!wave_surface)
-		wave_surface = wave_surface_create ();
-
 	printf ("Processing %s\n", filename);
 
-	scaled_flag = load_scaled_flag (filename);
+	scaled_flag = load_scaled_flag (filename, &aspect);
+
+	aspect /= std_aspect;
+	aspect = sqrt (aspect); // Discount the effect
+	if (.9 <= aspect && aspect <= 1.1)
+	{
+		printf ("Standard aspect ratio\n");
+		aspect = 1.;
+	}
+
+	if (aspect == 1.)
+	{
+		if (!standard_wave_path)
+			standard_wave_path = wave_path_create (aspect);
+		if (!standard_wave_surface)
+			standard_wave_surface = wave_surface_create (aspect);
+		wave_path = standard_wave_path;
+		wave_surface = standard_wave_surface;
+	}
+	else
+	{
+		wave_path = wave_path_create (aspect);
+		wave_surface = wave_surface_create (aspect);
+	}
+
+
 	border_transparent = border_is_transparent (scaled_flag);
 	waved_flag = texture_map (wave_surface, scaled_flag);
 	cairo_surface_destroy (scaled_flag);
@@ -305,7 +342,7 @@ wave_flag (const char *filename, const char *out_prefix)
 	// Paint shade gradient
 	{
 		cairo_save (cr);
-		cairo_pattern_t *gradient = wave_mesh_create (1);
+		cairo_pattern_t *gradient = wave_mesh_create (aspect, 1);
 		cairo_set_source (cr, gradient);
 
 		if (border_transparent)
@@ -377,6 +414,10 @@ wave_flag (const char *filename, const char *out_prefix)
 
 	cairo_surface_write_to_png (cairo_get_target (cr), out);
 	cairo_destroy (cr);
+	if (wave_path != standard_wave_path)
+		cairo_path_destroy (wave_path);
+	if (wave_surface != standard_wave_surface)
+		cairo_surface_destroy (wave_surface);
 }
 
 int

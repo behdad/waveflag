@@ -7,6 +7,7 @@ if test "x$1" = x-debug; then
 fi
 FLAG=$1
 test "x$FLAG" = x && FLAG=GB
+FLAG=${FLAG%.png}.png
 
 >lastcompiled.c
 DIPLAY_PID=
@@ -15,10 +16,12 @@ while true; do
 	if diff -u lastcompiled.c waveflag.c; then
 		continue
 	fi
-	cp waveflag.c lastcompiled.c
-	if gcc -std=c99 -Wall -Wextra lastcompiled.c `pkg-config --cflags --libs cairo` -o waveflag && ./waveflag $DEBUG waved- $FLAG.png; then
+
+	if make &&
+	   ./waveflag $DEBUG waved- $FLAG &&
+	   cp waveflag.c lastcompiled.c ; then
 		test -n "$DISPLAY_PID" && kill "$DISPLAY_PID"
-		display waved-$FLAG.png &
+		display waved-$FLAG &
 		DISPLAY_PID=$!
 	fi
 done
