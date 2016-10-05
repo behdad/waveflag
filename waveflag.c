@@ -120,40 +120,14 @@ load_scaled_flag (const char *filename)
 	return scaled;
 }
 
-/* Returns 65536 for luminosoty of 1.0. */
 static int
-luminosity (uint32_t pix)
+is_transparent (uint32_t pix)
 {
-	unsigned int sr = (pix >> 16) & 0xFF;
-	unsigned int sg = (pix >>  8) & 0xFF;
-	unsigned int sb = (pix      ) & 0xFF;
-
-	/* Apply gamma of 2.0 */
-	sr = sr * sr;
-	sg = sg * sg;
-	sb = sb * sb;
-
-	return  (sr * 13933u /* 0.2126 * 65536 */ +
-		 sg * 46871u /* 0.7152 * 65536 */ +
-		 sb *  4731u /* 0.0722 * 65536 */) / (255*255);
+	return ((pix>>24) < 0xff);
 }
 
-/* Returns luminosity. Only miningul if pixel is opaque.
- * If pixel is not opaque, sets *transparent to 1. */
 static int
-luminosity_and_transparency (uint32_t pix, int *transparent)
-{
-	if ((pix>>24) < 0xff)
-	{
-		*transparent = 1;
-		return 0;
-	}
-	return luminosity (pix);
-}
-
-static double
-calculate_border_luminosity_and_transparency (cairo_surface_t *scaled_flag,
-					      int *transparent)
+border_is_transparent (cairo_surface_t *scaled_flag)
 {
 	/* Some flags might have a border already.  As such, skip
 	 * a few pixels on each side... */
@@ -163,33 +137,24 @@ calculate_border_luminosity_and_transparency (cairo_surface_t *scaled_flag,
 	unsigned int height = cairo_image_surface_get_height (scaled_flag);
 	unsigned int sstride = cairo_image_surface_get_stride (scaled_flag) / 4;
 
-	unsigned int luma = 0;
-	unsigned int perimeter = (2 * ((width-2*skip) + (height-2*skip) - 2));
+	int transparent = 0;
 
 	assert (width > 2 * skip && height > 2 * skip);
 
-	*transparent = 0;
 
 	for (unsigned int x = skip; x < width - skip; x++)
-		luma += luminosity_and_transparency (s[x], transparent);
+		transparent |= is_transparent (s[x]);
 	s += sstride;
 	for (unsigned int y = 1 + skip; y < height - 1 - skip; y++)
 	{
-		luma += luminosity_and_transparency (s[skip], transparent);
-		luma += luminosity_and_transparency (s[width - 1 - skip], transparent);
+		transparent |= is_transparent (s[skip]);
+		transparent |= is_transparent (s[width - 1 - skip]);
 		s += sstride;
 	}
 	for (unsigned int x = skip; x < width - skip; x++)
-		luma += luminosity_and_transparency (s[x], transparent);
+		transparent |= is_transparent (s[x]);
 
-	if (*transparent)
-	{
-		/* Flag is non-rectangular; eg. Nepal.
-		 * Don't draw a border. */
-		return 0;
-	}
-
-	return luma / (65536. * perimeter);
+	return transparent;
 }
 
 static cairo_t *
@@ -271,7 +236,6 @@ wave_flag (const char *filename, const char *out_prefix)
 {
 	static cairo_path_t *wave_path;
 	static cairo_surface_t *wave_surface;
-	double border_luminosity;
 	int border_transparent;
 	char out[1000];
 
@@ -286,7 +250,7 @@ wave_flag (const char *filename, const char *out_prefix)
 	printf ("Processing %s\n", filename);
 
 	scaled_flag = load_scaled_flag (filename);
-	border_luminosity = calculate_border_luminosity_and_transparency (scaled_flag, &border_transparent);
+	border_transparent = border_is_transparent (scaled_flag);
 	waved_flag = texture_map (wave_surface, scaled_flag);
 	cairo_surface_destroy (scaled_flag);
 
@@ -303,9 +267,9 @@ wave_flag (const char *filename, const char *out_prefix)
 	// Paint border
 	if (!border_transparent)
 	{
-		double border_alpha = .2;//.5 + fabs (.5 - border_luminosity);
+		double border_alpha = .2;
 		double border_width = 4 * SCALE;
-		double border_gray = 0x42/255.;//(1 - border_luminosity);
+		double border_gray = 0x42/255.;
 		if (debug)
 			printf ("Border: alpha %g width %g gray %g\n",
 				border_alpha, border_width/SCALE, border_gray);
