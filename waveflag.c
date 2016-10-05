@@ -70,7 +70,7 @@ wave_path_create (void)
 }
 
 static cairo_pattern_t *
-wave_mesh_create (void)
+wave_mesh_create (int alpha)
 {
 	cairo_pattern_t *pattern = cairo_pattern_create_mesh();
 	cairo_matrix_t scale_matrix = {128./SIZE/SCALE, 0, 0, 128./SIZE/SCALE, 0, 0};
@@ -82,10 +82,20 @@ wave_mesh_create (void)
 	cairo_mesh_pattern_line_to(pattern,   M(4));
 	cairo_mesh_pattern_curve_to(pattern,  M(5), M(6), M(7));
 
-	cairo_mesh_pattern_set_corner_color_rgb(pattern, 0, 0, 0, .5);
-	cairo_mesh_pattern_set_corner_color_rgb(pattern, 1, 1, 0, .5);
-	cairo_mesh_pattern_set_corner_color_rgb(pattern, 2, 1, 1, .5);
-	cairo_mesh_pattern_set_corner_color_rgb(pattern, 3, 0, 1, .5);
+	if (alpha)
+	{
+		cairo_mesh_pattern_set_corner_color_rgba(pattern, 0, 0, 0, 0, 0);
+		cairo_mesh_pattern_set_corner_color_rgba(pattern, 1, 0, 0, 0, .5);
+		cairo_mesh_pattern_set_corner_color_rgba(pattern, 2, 0, 0, 0, 1);
+		cairo_mesh_pattern_set_corner_color_rgba(pattern, 3, 0, 0, 0, .5);
+	}
+	else
+	{
+		cairo_mesh_pattern_set_corner_color_rgb(pattern, 0, 0, 0, .5);
+		cairo_mesh_pattern_set_corner_color_rgb(pattern, 1, 1, 0, .5);
+		cairo_mesh_pattern_set_corner_color_rgb(pattern, 2, 1, 1, .5);
+		cairo_mesh_pattern_set_corner_color_rgb(pattern, 3, 0, 1, .5);
+	}
 
 	cairo_mesh_pattern_end_patch(pattern);
 
@@ -173,7 +183,7 @@ wave_surface_create (void)
 {
 	cairo_t *cr = create_image ();
 	cairo_surface_t *surface = cairo_surface_reference (cairo_get_target (cr));
-	cairo_pattern_t *mesh = wave_mesh_create ();
+	cairo_pattern_t *mesh = wave_mesh_create (0);
 	cairo_set_source (cr, mesh);
 	cairo_paint (cr);
 	cairo_pattern_destroy (mesh);
@@ -295,10 +305,7 @@ wave_flag (const char *filename, const char *out_prefix)
 	// Paint shade gradient
 	{
 		cairo_save (cr);
-		cairo_pattern_t *gradient = cairo_pattern_create_linear (0, 0,
-									 128*SCALE,128*SCALE);
-		cairo_pattern_add_color_stop_rgba (gradient, 0, 0, 0, 0, 0);
-		cairo_pattern_add_color_stop_rgba (gradient, 1, 0, 0, 0, 1);
+		cairo_pattern_t *gradient = wave_mesh_create (1);
 		cairo_set_source (cr, gradient);
 
 		if (border_transparent)
