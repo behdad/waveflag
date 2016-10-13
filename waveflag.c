@@ -343,22 +343,17 @@ wave_flag (const char *filename, const char *out_prefix)
 	// Paint shade gradient
 	{
 		cairo_pattern_t *gradient = wave_mesh_create (aspect, 1);
+		cairo_pattern_t *w = cairo_pattern_create_for_surface (waved_flag);
 
 		cairo_save (cr);
 		cairo_set_source (cr, gradient);
 
-		if (border_transparent)
-		{
-			cairo_set_operator (cr, CAIRO_OPERATOR_ATOP);
-			cairo_paint_with_alpha (cr, .3);
-		}
-		else
-		{
-			cairo_set_operator (cr, CAIRO_OPERATOR_SOFT_LIGHT);
-			cairo_paint (cr);
-		}
+		cairo_set_operator (cr, CAIRO_OPERATOR_SOFT_LIGHT);
+		cairo_mask (cr, w);
 
 		cairo_restore (cr);
+
+		cairo_pattern_destroy (w);
 	}
 
 	if (debug)
