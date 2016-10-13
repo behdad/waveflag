@@ -34,16 +34,17 @@ static unsigned int debug;
 #define top 21
 #define bot 128-top
 #define B 21
+#define C 4
 static struct { double x, y; } mesh_points[] =
 {
-  {  1, top},
-  { 43, top-B},
-  { 85, top+B},
-  {127, top},
-  {127, bot},
-  { 85, bot+B},
-  { 43, bot-B},
-  {  1, bot},
+  {  1, top+C},
+  { 43, top-B+C},
+  { 85, top+B-C},
+  {127, top-C},
+  {127, bot-C},
+  { 85, bot+B-C},
+  { 43, bot-B+C},
+  {  1, bot+C},
 };
 #define M(i) \
 	x_aspect (mesh_points[i].x, aspect), \
