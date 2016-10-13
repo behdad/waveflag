@@ -33,7 +33,7 @@ static unsigned int debug;
 #define std_aspect (5./3.)
 #define top 21
 #define bot 128-top
-#define B 27
+#define B 21
 static struct { double x, y; } mesh_points[] =
 {
   {  1, top},
