@@ -138,9 +138,9 @@ static cairo_surface_t *
 load_scaled_flag (const char *filename, double *aspect)
 {
 	cairo_surface_t *flag = cairo_image_surface_create_from_png (filename);
+	cairo_surface_t *scaled = scale_flag (flag);
 	*aspect = (double) cairo_image_surface_get_width (flag) /
 		  (double) cairo_image_surface_get_height (flag);
-	cairo_surface_t *scaled = scale_flag (flag);
 	cairo_surface_destroy (flag);
 	return scaled;
 }
@@ -342,8 +342,9 @@ wave_flag (const char *filename, const char *out_prefix)
 
 	// Paint shade gradient
 	{
-		cairo_save (cr);
 		cairo_pattern_t *gradient = wave_mesh_create (aspect, 1);
+
+		cairo_save (cr);
 		cairo_set_source (cr, gradient);
 
 		if (border_transparent)
